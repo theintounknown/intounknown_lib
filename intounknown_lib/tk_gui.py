@@ -1,6 +1,7 @@
 import tkinter as tk
 import tkinter.ttk as ttk
 from tkinter import messagebox
+import re
 
 class EnhancedButton(tk.Frame):
     # input_args={} should be be dict
@@ -272,6 +273,110 @@ class EnhancedCombobox(tk.Frame):
 
     def clear(self):
         self.combo_obj.set('')
+
+    def get_values(self):
+        return self.values
+
+
+# TK Listbox
+class EnhancedListbox(tk.Frame):
+    def __init__(self, parent, txt, values=None, onchange=None, label_args=None, inputs_args=None, *args, **kwargs):
+        super().__init__(parent, *args, **kwargs)
+        self.onchange = onchange
+        input_args = inputs_args or {}
+        label_args = label_args or {}
+        self.config(padx=10, pady=10)
+
+        #self.variable = tk.StringVar()
+        row = 0
+        if txt != None:
+            label_obj = ttk.Label(self, text=txt, **label_args)
+            label_obj.grid(row=row, column=0, sticky=tk.W)
+            row += 1
+
+        self.yScroll = tk.Scrollbar(self, orient=tk.VERTICAL)
+        self.yScroll.grid(row=row, column=1, sticky=(tk.N + tk.S))
+        self.xScroll = tk.Scrollbar(self, orient=tk.HORIZONTAL)
+        self.xScroll.grid(row=row+1, column=0, sticky=(tk.E + tk.W))
+
+        self.list_var = tk.StringVar()
+        self.listbox = tk.Listbox(
+            self,
+            xscrollcommand=self.xScroll.set,
+            yscrollcommand=self.yScroll.set,
+            listvariable=self.list_var,
+            exportselection=False,
+            **input_args
+        )
+        self.listbox.grid(row=row, column=0, sticky=(tk.N + tk.S + tk.E + tk.W))
+        self.xScroll['command'] = self.listbox.xview
+        self.yScroll['command'] = self.listbox.yview
+
+        self.listbox.bind('<<ListboxSelect>>', self.on_select)
+
+    def on_select(self, event):
+        if self.onchange != None:
+            self.onchange()
+
+    def clear(self):
+        size = self.listbox.size()
+        if size > 0:
+            self.listbox.select_clear(0, size)
+
+    # Values will be a [(1,'one'),(2,'two')]
+    def set_options(self, values):
+        self.clear()
+
+        match_quote_re = re.compile(r'[\"]')
+
+        self.values = values
+        text_vals = []
+
+        for row in values:
+            tmp = str(row[1])
+            tmp = match_quote_re.sub("'",tmp)
+            text_vals.append('"'+tmp+'"')
+
+        text_val = ' '.join(text_vals)
+        self.list_var.set(text_val)
+        self.listbox.see(0)
+
+    def set(self, value):
+        self.clear()
+
+        idx = -1
+        counter = 0
+        for pair in self.values:
+            lookup, name = pair
+            if lookup == value:
+                idx = counter
+                break
+            counter += 1
+
+        if idx < 0:
+            return False
+
+        self.listbox.selection_set(idx)
+        return True
+
+    def get(self):
+        result = []
+        indexes = self.listbox.curselection()
+        for idx in indexes:
+            result.append(self.values[idx][0])
+
+        if len(result) < 1:
+            return None
+        elif len(result) == 1:
+            return result[0]
+
+        return result
+
+    def get_title(self, lookup):
+        for obj in self.values:
+            if obj[0] == lookup:
+                return obj[1]
+        return None
 
     def get_values(self):
         return self.values
