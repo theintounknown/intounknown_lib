@@ -76,34 +76,7 @@ if __name__ == '__main__':
     from random import randint, choice
     from pprint import pprint
 
-    #loop = Loop()
-    #from time import sleep
-    # try:
-    #     print('started')
-    #     #sleep(2)
-    #     print('done sleeping')
-    #     loop.run(lambda: print('test 0'))
-    #     loop.run(lambda: print('test 1'), cb_delay=1)
-    #     loop.run(lambda: print('test 2'), cb_delay=2)
-    #     loop.run(lambda: print('test 3'))
-    #     loop.run(lambda: loop.stop(), cb_delay=4)
-    #     loop.start()        # start ioloop, this is blocking
-    # except:
-    #     pass
-    # print('stopped')
-    # quit()
-
-    # import tornado.ioloop
-    # import platform
-    #
-    # # Configure selector event loop (run this step only for Windows)
-    # if platform.system() == 'Windows':
-    #     print('running Windows only configuration step')
-    #     import asyncio
-    #     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())  # python-3.8.0a4
-    #
-    # loop = tornado.ioloop.IOLoop.current()
-
+    # Async test of state management's event subscriptions
     class TestListeners:
         def __init__(self, ioloop, store):
             self.ioloop = ioloop
@@ -137,7 +110,7 @@ if __name__ == '__main__':
         def _generate_fake_jobs(self, num_of_jobs=10, max_duration=5):
             for i in range(0, num_of_jobs):
                 fake_job_exec_time = randint(1, max_duration)
-                category = choice(['saveRecord', 'executeNotepad', 'getCoffee', 'someElse'])
+                category = choice(['getRecord', 'saveRecord', 'deleteRecord', 'findCoffee'])
                 job = self._create_fake_job(category=category, fake_duration=fake_job_exec_time)
                 self.work_queue.append(job)
 
@@ -145,68 +118,62 @@ if __name__ == '__main__':
         def _display_fake_jobs(self):
             tmp = deepcopy(self.work_queue)
             tmp = sorted(tmp, key=lambda a: a['fake_duration'])
-            print('Fake Jobs in execution order')
+            print('Fake Jobs in execution order:')
             pprint(tmp)
+            print('--- end of fake jobs ---')
 
-
-        # def _do_work(self):
-        #     self.ioloop.run(
-        #         lambda: self.store.set(
-        #             Consts.STATE_KEY_EVENT1,
-        #             {'id': 1, 'msg': 'The first message'}
-        #         )
-        #     )
-        #
-        #     self.ioloop.run(lambda: self.ioloop.stop(), cb_delay=1)
 
         def _process_jobs_in_queue(self):
             while True:
                 try:
-                    obj = self.work_queue.pop()
+                    obj = self.work_queue.pop(0)       # get first item in  list (unshift)
                 except IndexError:
                     break
 
-                print(obj)
                 duration = obj['fake_duration']
                 category = obj['category']
                 job_id = obj['job_id']
 
-                self.ioloop.run(
-                    lambda: self.store.set(
-                        Consts.STATE_KEY_EVENT1,
-                        {'id': job_id, 'msg': 'Did work: '+category+' it took '+str(duration)+' execute'}
-                    )
-                    #cb_delay=duration
-                )
+                if category == 'shutdown':
+                    self.ioloop.run(self.ioloop.stop, cb_delay=duration)
+                else:
+                    # Create a closure to keep to obj in the scope of the callback
+                    def make_cb(obj):
+                        # the function return that will be wrapped in the scope where obj was set
+                        def run():
+                            duration = obj['fake_duration']
+                            category = obj['category']
+                            job_id = obj['job_id']
+
+                            self.store.set(
+                                Consts.STATE_KEY_EVENT1,
+                                {'job_id': job_id, 'msg': 'Did work: '+category+' it took '+str(duration)+' execute'}
+                            )
+                        return run
+                    cb = make_cb(obj)   # execute the function and get the closure callback
+
+                    self.ioloop.run(cb, cb_delay=duration)      # run the fake job with the provided delay
 
 
         def start(self):
             self._bind()
-            #self._do_work()
             self._generate_fake_jobs(num_of_jobs=10, max_duration=5)
-            self._create_fake_job(category='shutdown', fake_duration=7)
+            shutdown_job = self._create_fake_job(category='shutdown', fake_duration=7)
+            self.work_queue.append(shutdown_job)
+
+            self._display_fake_jobs()
             self._process_jobs_in_queue()
-
-
-
-    #     loop.run(lambda: print('test 0'))
-
 
     loop = Loop()           # async loop
     store = StateStore()    # state store
     demo = TestListeners(loop, store)   # demo listener / events
-    #demo._display_fake_jobs()
-
-    #pprint(demo.work_queue)
-    #quit()
-
     loop.run(demo.start)    # queue the listener class to start
     loop.start()            # start the tornado ioloop
     print('finished')
 
-
     quit()
 
+    # Non async demo below
 
     def lister_test1(key, state):
         print('lister_test1', key, state)
