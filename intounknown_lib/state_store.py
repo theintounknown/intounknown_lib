@@ -72,7 +72,7 @@ class StateStore:
 
 
 if __name__ == '__main__':
-    from core_lib.ioloop_wrapper import Loop
+    from intounknown_lib.ioloop_wrapper import Loop
     from random import randint, choice
     from pprint import pprint
 
