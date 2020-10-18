@@ -1,4 +1,7 @@
 Libraries that I build and use on Twitch
+* Wrappers around Tkinter
+* State Management Library with Subscribable Events
+* Database ORM
 
 # Install dependencies
 pip install -r requirements.txt
