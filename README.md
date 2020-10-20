@@ -12,3 +12,7 @@ pip freeze | xargs pip uninstall -y
 # Run unit tests
 nose2 -t core_lib/ -s tests/unit/
 
+# To run tkinter on Ubuntu / Debian
+sudo apt-get install python3-tk build-essential
+
+
