@@ -45,7 +45,7 @@ class SQLiteConn(DatabaseInterface):
             self.connections[alias].close()
             del self.cursors[alias]
             del self.connections[alias]
-            print('shutdown ['+alias+']')
+            #print('shutdown ['+alias+']')
         except KeyError:
             raise Exception('attempted to shutdown connection ['+alias+'] which was not defined')
 
@@ -79,6 +79,13 @@ class SQLiteConn(DatabaseInterface):
     def rollback(self):
         self.conn.rollback()
 
+    def _valid_ids(self, ids):
+        for cur_id in ids:
+            if not isinstance(cur_id, int):
+                raise Exception('id passed [] was not an id')
+
+
+
     # ids can be single value or a list
     def load(self, table, ids=None):
         ids = ids or []
@@ -88,10 +95,7 @@ class SQLiteConn(DatabaseInterface):
             ids = [ids]     # convert to a list
 
         # Make sure that we are only excepting integers as ids
-        print(ids)
-        for cur_id in ids:
-            if not isinstance(cur_id, int):
-                raise Exception('id passed [] was not an id')
+        self._valid_ids(ids)
 
         ids_str = ','.join([str(a) for a in ids])
         sql = "select * from %s where id in (%s)" % (table, ids_str)
@@ -137,8 +141,8 @@ class SQLiteConn(DatabaseInterface):
                 values.append(val)      # collect all the values to insert
 
             # if id null force_id_insert
-            if obj_id == False or force_id_insert:
-                column_str = ','.join([str(c) for c in columns])
+            if not obj_id or force_id_insert:
+                columns_str = ','.join([str(c) for c in columns])
                 # create the number question marks needed to match the number of columns and values
                 question_marks = []
                 for val in range(0, len(values)):
@@ -147,7 +151,9 @@ class SQLiteConn(DatabaseInterface):
                 question_marks_str = ','.join(question_marks)   # create question mark string for insert statement
 
                 sql = "insert into %s (%s) values(%s)" % (table, columns_str, question_marks_str)
+                #print(sql)
                 obj_id = self.insert_return_id(sql, values)
+                #print(obj_id)
 
             else:
                 update_clause = []      # used to store key value pair for update insert
@@ -160,18 +166,41 @@ class SQLiteConn(DatabaseInterface):
                 sql = "update %s set %s where id = %s" % (table, update_clause_str, '?')
                 self.execute(sql, values)
 
-            # if many records stored
-            if many:
-                return result
+            result.append(obj_id)      # build list of newly created row ids
 
-            # If single requested
-            return result[0]
+        # if many records stored
+        if many:
+            return result
+
+        # If single requested
+        return result[0]
 
 
 
-    def trash(self, table, ids):
+    # ids - single integer or list of integers
+    def trash(self, table, ids=None):
         ids = ids or []
+        many = isinstance(ids, list)
 
+        if not many:
+            ids = [ids]     # convert single id to a list
+
+        self._valid_ids(ids)    # valid ids
+
+        ids_str = ','.join([str(c) for c in ids])
+
+        sql = 'delete from %s where id in (%s)' % (table, ids_str)
+        self.execute(sql)
+
+        if many:
+            return ids
+
+        return ids[0]      # technically still a string
+
+
+    def dumpTable(self, table):
+        sql = 'select * from '+table
+        return self.select(sql)
 
 
 
@@ -194,8 +223,20 @@ if __name__ == '__main__':
     #db.connect(db_path2, alias='test2')     # connect second database
     #print('Selected DB: ', db.get_selected_alias())
 
+
     #db.choose('test')
     #print('Selected DB: ', db.get_selected_alias())
+
+
+    rows = [
+        {'name': 'One', 'lookup': 'own', 'status': 0},
+        {'name': 'Two', 'lookup': 'two', 'status': 1},
+        {'name': 'Three', 'lookup': 'three', 'status': 0},
+        {'name': 'Four', 'lookup': 'four', 'status': 1},
+    ]
+
+    #db.save('test', rows)
+    #db.commit()
 
 
     #sql = "insert into test (name, lookup, status) values(?, ?, ?)"
@@ -204,10 +245,10 @@ if __name__ == '__main__':
     #row_id = db.insert_return_id(sql, ['Six', 'six', True])
     #print('row_id: ', row_id)
 
-    obj = db.load('test', 2)
-    pprint(obj)
-    obj = db.load('test', [2,3,3,99,True])
-    pprint(obj)
+    #obj = db.load('test', 2)
+    #pprint(obj)
+    #obj = db.load('test', [2,3,3,99,True])
+    #pprint(obj)
 
     # Todo: finish testing save() method
     #objs = [
@@ -221,6 +262,29 @@ if __name__ == '__main__':
     #sql = "select * from test"
     #result = db.select(sql)
     #pprint(result)
+
+    #db.trash('test', 1)
+    #db.commit()
+
+    #sql = 'select id from test'
+    #result = db.select(sql)
+    #ids = [a['id'] for a in result]
+
+    #print(db.load('test', ids))
+
+    # Delete all records
+    if False:
+        sql = 'select id from test'
+        result = db.select(sql)
+        ids = [a['id'] for a in result]
+        print(ids)
+
+        db.trash('test', ids)
+        db.commit()
+
+    #for row in db.dumpTable('test'):
+    #    print(row)
+
 
     db.shutdown_all()
 
