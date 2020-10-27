@@ -75,25 +75,81 @@ def start_worker(queues):
     printLine('worker is shutdown')
 
 
-queue_work_in = ThreadCom()
-queue_work_out = ThreadCom()
 
-queues = {
-    'work_in': queue_work_in,
-    'work_out': queue_work_out,
-    'in': ThreadCom(),
-    'out': ThreadCom(),
-}
+class ProcessManagement:
+    def __init__(self):
+        self.queue_work_in = ThreadCom()
+        self.queue_work_out = ThreadCom()
+
+        self.worker_id = 0
+        self.workers = {}
+
+    def create_thread(self, target_func, *args, **kwargs):
+        worker_id = self.worker_id
+
+        in_com = ThreadCom()
+        out_com = ThreadCom()
+
+        t = Thread(target=target_func, *args, **kwargs)
+
+        self.workers[worker_id] = {
+            'type': 'thread',
+            'object': t,
+            'in_com': in_com,
+            'out_com': out_com,
+        }
+
+        t.start()
+
+        self.worker_id += 1
+
+    # write to work input queue
+    def write_work(self, msg):
+        self.queue_work_in.write(msg)
+
+    # read from work output queue
+    def read_work(self, wait_time=0):
+        return queue_work_out.read(wait_time)
+
+    # write a worker's command input
+    def write_in(self, worker_id, msg):
+        worker = self.workers.get(worker_id, None)
+        if worker == None:
+            raise Exception('worker_id ['+worker_id+'] not found ')
+
+        worker['in'].write(msg)
+
+    # read from a worker's command output
+    def read_out(self, worker_id, wait_time=0):
+        worker = self.workers.get(worker_id, None)
+        if worker == None:
+            raise Exception('worker_id [' + worker_id + '] not found ')
+
+        worker['out'].read(wait_time))
+
+    # clear the queue and all memory before shutdown
+    def drain_work_in_queue(self):
+        pass
+
+    # clear the queue and all memory before shutdown
+    def drain_work_out_queue(self):
+        pass
+
+    # shutdown a worker
+    def shutdown(self, worker_id):
+        pass
+
+    # shutdown all workers
+    def shutdown_all(self):
+        pass
 
 
 t = Thread(target=start_worker, args=[queues])
 t.start()
-queue_work_in.write('first job')
 sleep(1)
 queues['in'].write('some other message')
 queues['in'].write('shutdown')
 
-printLine('from work out: '+queue_work_out.read(0.5))
 printLine(queues['out'].read(0.5))
 
 while True:
