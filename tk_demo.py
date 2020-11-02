@@ -139,7 +139,7 @@ class Application(tk.Tk):
         listbox_frame = ScrollFrame(self.tabs, height=500)
 
         values = [
-            (1, 'Orange'),
+            ('orange', 'Orange'),
             (2, 'Purple'),
             (3, 'Green'),
             (4, 'Yellow'),

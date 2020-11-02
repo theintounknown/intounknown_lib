@@ -13,21 +13,36 @@ class Application(tk.Tk):
         self.job_id = 1
 
         self.title("TK Thread Demo")
-        self.geometry("300x400")
+        self.geometry("400x500")
         install_default_styles()        # load default style for EnhancedTable
 
         # Setup content area
         self.main_menu = tk.Frame(self)
         content = ttk.LabelFrame(self.main_menu, text="Thread Control")
 
+        self.inputs = {}
+
+        #jobs = [(1, 'One'), (2, 'Two'), (3, 'Three')]
+        self.inputs['jobs'] = EnhancedListbox(content, 'Jobs')
+        #self.inputs['jobs'].set_options(jobs)
+        self.inputs['jobs'].grid(row=0, column=0, sticky=(tk.N + tk.W))
+
+        EnhancedLabel(content, 'Responses').grid(row=1, column=0, sticky=(tk.N + tk.W))
+        self.inputs['responses'] = EnhancedText(content, None, 'some text')
+        self.inputs['responses'].grid(row=2, column=0, sticky=(tk.N + tk.W))
+
+
         EnhancedButton(content, 'Add Job', command=self.add_job) \
-            .grid(row=0, column=0, sticky=(tk.N + tk.W))
+            .grid(row=3, column=0, sticky=(tk.N + tk.W))
 
         EnhancedButton(content, 'Print Job Responses', command=self.print_response_queue) \
-            .grid(row=1, column=0, sticky=(tk.N + tk.W))
+            .grid(row=4, column=0, sticky=(tk.N + tk.W))
+
+        EnhancedButton(content, 'Update Form', command=self.update_form) \
+            .grid(row=5, column=0, sticky=(tk.N + tk.W))
 
         EnhancedButton(content, 'Shutdown', command=lambda: None) \
-            .grid(row=2, column=0, sticky=(tk.N + tk.W))
+            .grid(row=6, column=0, sticky=(tk.N + tk.W))
 
         content.grid(row=0, column=0, sticky=(tk.N + tk.W))
         self.main_menu.grid(row=0, column=0, sticky=(tk.N + tk.W))
@@ -36,6 +51,20 @@ class Application(tk.Tk):
         worker_id = self.process_manager.get_random_worker()
         self.process_manager.write_work(worker_id, msg)
         self.job_id += 1
+
+    def update_form(self):
+        msg = {
+            'jobs': [(1, 'One'), (2, 'Two'), (3, 'Three')],
+            #'jobs' : 1,
+            'responses': 'One\nTwo\n',
+        }
+
+        for key, val in msg.items():
+            if key == 'jobs':
+                self.inputs[key].set_options(val)
+                continue
+
+            self.inputs[key].set(val)
 
     def add_job(self):
         printLine('add_job called')

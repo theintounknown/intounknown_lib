@@ -11,6 +11,102 @@ from multiprocessing import Queue as ProcessQueue
 
 from time import time, sleep
 from random import randint
+from uuid import uuid4
+
+class BackgroundManager:
+    def __init__(self, process_manager, run_after_cb):
+        self.queue = []
+        self.store = MessageStore()
+        self.process_manager = process_manager
+        self.run_after = run_after_cb
+        self.shutdown_on = False
+
+    def add_job(self, msg, callback):
+        msg_id = self.store.set({
+            'msg': msg,
+            'callback': callback,
+        })
+
+        self.queue.append(msg_id)
+
+        worker_msg = {
+            'msg_id': msg_id,
+            'msg': 'msg',
+        }
+
+        worker_id = self.process_manager.get_random_worker()
+        self.process_manager.write_work(worker_id, worker_msg)
+
+        return msg_id
+
+#    def remove_job(self, msg_id):
+#        self.queue.remove(msg_id)
+#        self.store.delete(msg_id)
+
+    def get_queue_size(self):
+        return len(self.queue)      # get queue size
+
+    def _listen(self):
+        # if shutdown flag is on
+        if self.shutdown_on:
+            printLine('BackgroundManager: shutting down')
+            return
+
+        messages = self.process_manager.slurp_work_out()    # will receive at least one message [None]
+        # Expect message in this format:
+        # {'msg_id' : '', 'msg' : ''}
+
+        # loop over responses
+        for obj in messages:
+            if res_msg is not None:
+                msg_id = obj.get('msg_id', None)    # get message id
+                res_msg = obj.get('msg', None)      # get response message
+
+                # check that a message id was returned
+                if msg_id is None:
+                    continue
+
+                msg = self.store.get(msg_id, delete=True)   # get callback from store and auto remove message from store
+                cb = msg['callback']    # get the callback
+                cb(res_msg)     # call the callback with the response message
+
+                self.queue.remove(msg_id)   # remove it from the queue
+
+        self.run_after(100, self._listen)
+
+
+class MessageStore:
+    def __init__(self):
+        self.messages = {}
+
+    def _generate_id(self):
+        return str(uuid4())
+
+    def get(self, msg_id, delete=False):
+        msg = self.messages.get(msg_id, None)
+        if delete and msg is not None:
+            del self.messages[msg_id]
+
+        return msg
+
+    def set(self, msg):
+        msg_id = self._generate_id()
+        self.messages[msg_id] = msg
+        return msg_id
+
+    def delete(self, msg_id):
+        if msg_id not in self.messages:
+            return
+
+        del self.messages[msg_id]
+
+    def get_ids(self):
+        return tuple(self.messages.keys())
+
+    def get_size(self):
+        return len(self.messages)
+
+
 
 print_lock = ThreadLock()
 def printLine(*args, **kwargs):
@@ -282,6 +378,13 @@ def start_worker(queues=None, worker_id=None):
 
 
 if __name__ == '__main__':
+    # m = MessageStore()
+    # msg_id = m.set('hello world')
+    # print(msg_id)
+    # print(m.get(msg_id, delete=True))
+    # #m.delete(msg_id)
+    # print(m.get(msg_id))
+    # quit()
 
     p = ProcessManagement()
     worker_ids = []
