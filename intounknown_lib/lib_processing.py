@@ -78,6 +78,14 @@ class ProcessManagement:
             raise Exception('worker_id ['+worker_id+'] not found ')
         return worker
 
+    # obj_type = thread | process
+    def get_random_worker(self, obj_type='thread'):
+        for worker_id, obj in self.workers.items():
+            if obj['type'] == obj_type:
+                return worker_id
+
+        return None
+
     def create_thread(self, target_func, **kwargs):
         worker_id = self.worker_id
         self.worker_id += 1
@@ -189,6 +197,20 @@ class ProcessManagement:
             'work_out' : worker['work_out'].size(),
         }
 
+    # Get all message from work out queue
+    def slurp_work_out(self, worker_id):
+        worker = self._get_object(worker_id)
+        queue_obj = worker['work_out']
+
+        result = []
+        while True:
+            msg = queue_obj.read()
+            if msg is None:
+                break
+            result.append(msg)
+
+        return result
+
     def _drain_queue(self, queue_obj):
         result = []
         if queue_obj is None:
@@ -196,9 +218,9 @@ class ProcessManagement:
 
         while True:
             msg = queue_obj.read()
-            result.append(msg)
             if msg is None:
                 break
+            result.append(msg)
 
         return result
 
