@@ -174,21 +174,41 @@ class ProcessManagement:
 
     # write a worker's command input
     def write_in(self, worker_id, msg):
-        worker = self.workers.get(worker_id, None)
+        worker = self._get_object(worker_id)
         worker['in_com'].write(msg)
 
     # read from a worker's command output
     def read_out(self, worker_id, wait_time=0):
-        worker = self.workers.get(worker_id, None)
+        worker = self._get_object(worker_id)
         worker['out_com'].read(wait_time)
 
-    # clear the queue and all memory before shutdown
-    def drain_work_in_queue(self):
-        pass
+    def get_queue_sizes(self, worker_id):
+        worker = self._get_object(worker_id)
+        return {
+            'work_in' : worker['work_in'].size(),
+            'work_out' : worker['work_out'].size(),
+        }
 
-    # clear the queue and all memory before shutdown
-    def drain_work_out_queue(self):
-        pass
+    def _drain_queue(self, queue_obj):
+        result = []
+        if queue_obj is None:
+            return result
+
+        while True:
+            msg = queue_obj.read()
+            result.append(msg)
+            if msg is None:
+                break
+
+        return result
+
+    # clear the work queues and all memory before shutdown
+    def drain_work_queues(self):
+        self._drain_queue(self.process_queue_work_in)
+        self._drain_queue(self.process_queue_work_out)
+        self._drain_queue(self.thread_queue_work_in)
+        self._drain_queue(self.thread_queue_work_out)
+
 
     # shutdown a worker
     def shutdown(self, worker_id):
@@ -244,17 +264,26 @@ if __name__ == '__main__':
     p = ProcessManagement()
     worker_ids = []
     for a in range(12):
-        #worker_ids.append(p.create_thread(start_worker, worker_id=a))
-        worker_ids.append(p.create_process(start_worker, worker_id=a))
+        worker_ids.append(p.create_thread(start_worker, worker_id=a))
+        #worker_ids.append(p.create_process(start_worker, worker_id=a))
 
     first_id = worker_ids[0]
 
-    number_of_jobs = 1000
+    number_of_jobs = 100
     for a in range(number_of_jobs):
         txt = f'job {a}'
         p.write_work(first_id, txt)
 
+
     completed_jobs = 0
+
+    # drain queues and force a shutdown
+    #if True:
+    #    sleep(1)
+    #    printLine(p.get_queue_sizes(first_id))
+    #    p.drain_work_queues()
+    #    completed_jobs = number_of_jobs
+
     while True:
         result = p.read_work(first_id, 0.5)
         if result is not None:
