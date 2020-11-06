@@ -15,27 +15,36 @@ from uuid import uuid4
 
 class BackgroundManager:
     def __init__(self, process_manager, run_after_cb):
-        self.queue = []
+        self.queue = []     # track what jobs are currently being processed
         self.store = MessageStore()
         self.process_manager = process_manager
         self.run_after = run_after_cb
         self.shutdown_on = False
 
+        worker_id = self.process_manager.get_random_worker()
+        self.queue_access = worker_id
+
+        self._notify_queue_callback = None
+        self._listen()
+
+    def shutdown(self):
+        self.shutdown_on = True
+
     def add_job(self, msg, callback):
+        # store callback by unique request id
         msg_id = self.store.set({
-            'msg': msg,
-            'callback': callback,
+            'msg': msg,     # store message for debugging
+            'callback': callback,   # callback to call with response
         })
 
-        self.queue.append(msg_id)
+        self.queue.append(msg_id)       # track that we are processing a new job
 
         worker_msg = {
             'msg_id': msg_id,
-            'msg': 'msg',
+            'msg': msg,
         }
 
-        worker_id = self.process_manager.get_random_worker()
-        self.process_manager.write_work(worker_id, worker_msg)
+        self.process_manager.write_work(self.queue_access, worker_msg)
 
         return msg_id
 
@@ -46,21 +55,49 @@ class BackgroundManager:
     def get_queue_size(self):
         return len(self.queue)      # get queue size
 
+
+    def set_notify_subscriber(self, cb):
+        self._notify_queue_callback = cb
+        self.cached_notify_msg = None
+
+
+    def _notify_subscriber(self):
+        # check if a callback is set, if not return
+        if self._notify_queue_callback is None:
+            return
+
+        result = []
+        for msg_id in self.queue:
+            req_msg = self.store.get(msg_id)    # for testing this is a string
+            raw_msg = req_msg.get('msg')
+            result.append(raw_msg)
+
+        if self.cached_notify_msg != result:
+            self.cached_notify_msg = result
+            self._notify_queue_callback(result)
+
+
     def _listen(self):
+        #print('BackgroundManager._listen called')
+
+        self._notify_subscriber()
+
         # if shutdown flag is on
         if self.shutdown_on:
             printLine('BackgroundManager: shutting down')
             return
 
-        messages = self.process_manager.slurp_work_out()    # will receive at least one message [None]
+        messages = self.process_manager.slurp_work_out(self.queue_access)    # will receive at least one message [None]
         # Expect message in this format:
         # {'msg_id' : '', 'msg' : ''}
 
         # loop over responses
-        for obj in messages:
+        for res_msg in messages:
+            # if slurp returns no messages
             if res_msg is not None:
-                msg_id = obj.get('msg_id', None)    # get message id
-                res_msg = obj.get('msg', None)      # get response message
+                printLine('_listen.res_msg', res_msg)
+                msg_id = res_msg.get('msg_id', None)    # get message id
+                res_msg = res_msg.get('msg', None)      # get response message
 
                 # check that a message id was returned
                 if msg_id is None:
@@ -72,7 +109,7 @@ class BackgroundManager:
 
                 self.queue.remove(msg_id)   # remove it from the queue
 
-        self.run_after(100, self._listen)
+        self.run_after(100, self._listen)   # rerun after 100 milliseconds
 
 
 class MessageStore:
@@ -374,6 +411,49 @@ def start_worker(queues=None, worker_id=None):
             printLine('cmd: message has been written: '+ msg)
 
     printLine('worker is shutdown')
+
+
+# This is a test function for the BackgroundManager
+#   (basic request wrapped in dicts for testing)
+def start_background_worker(queues=None, worker_id=None):
+    #printLine('start_worker', queues)
+    work_queue_in = queues.get('work_in')
+    work_queue_out = queues.get('work_out')
+    cmd_queue_in = queues.get('in')
+    cmd_queue_out = queues.get('out')
+
+    printLine(f'worker [{worker_id}] starting')
+
+    while True:
+        # Work Queue Requests
+        if work_queue_in != None:
+            req_msg = work_queue_in.read(0.5)     # read from the work and wait 1 second for message
+            if req_msg != None:
+                printLine(f'worker [{worker_id}]:', req_msg)
+
+                request_msg_id = req_msg['msg_id']
+                request_payload = req_msg['msg']    # for testing assume a string
+
+                # Executing Processor/Router here
+                rand_sleep = randint(0, 1000) / 1000.0
+                sleep(rand_sleep)
+                result = 'worker echo: ' + request_payload
+
+                response_msg = {
+                    'msg_id': request_msg_id,
+                    'msg': result,
+                }
+
+                work_queue_out.write(response_msg)
+
+        # Direct Worker Request Queue
+        msg = cmd_queue_in.read()   # check queue but don't wait
+        if msg == 'shutdown':
+            printLine('cmd: shutting down worker')
+            break
+
+    printLine('worker is shutdown')
+
 
 
 
