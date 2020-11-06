@@ -95,7 +95,7 @@ class BackgroundManager:
         for res_msg in messages:
             # if slurp returns no messages
             if res_msg is not None:
-                printLine('_listen.res_msg', res_msg)
+                #printLine('_listen.res_msg', res_msg)
                 msg_id = res_msg.get('msg_id', None)    # get message id
                 res_msg = res_msg.get('msg', None)      # get response message
 
