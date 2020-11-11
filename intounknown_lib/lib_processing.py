@@ -191,10 +191,10 @@ class ProcessCom(ThreadCom):
 class ProcessManagement:
     def __init__(self):
         self.process_queue_work_in = None
-        self.process_queue_work_out =  None
+        self.process_queue_work_out = None
 
-        self.thread_queue_work_in =  None
-        self.thread_queue_work_out =  None
+        self.thread_queue_work_in = None
+        self.thread_queue_work_out = None
 
         self.worker_id = 0
         self.workers = {}
@@ -219,24 +219,47 @@ class ProcessManagement:
 
         return None
 
-    def create_thread(self, target_func, **kwargs):
+    # work_queue_type = thread|process # thread and use thread or process queues
+    def create_thread(self, target_func, work_queue_type='thread', **kwargs):
         worker_id = self.worker_id
         self.worker_id += 1
 
-        # initialize work in queue it not defined
-        if not self.thread_queue_work_in:
-            self.thread_queue_work_in = ThreadCom()
+        queue_work_in = None
+        queue_work_out = None
 
-        # initialize work out queue it not defined
-        if not self.thread_queue_work_out:
-            self.thread_queue_work_out = ThreadCom()
+        if work_queue_type == 'thread':
+            # initialize work in queue it not defined
+            if not self.thread_queue_work_in:
+                self.thread_queue_work_in = ThreadCom()
+            queue_work_in = self.thread_queue_work_in
+
+            # initialize work out queue it not defined
+            if not self.thread_queue_work_out:
+                self.thread_queue_work_out = ThreadCom()
+            queue_work_out = self.thread_queue_work_out
+
+        elif work_queue_type == 'process':
+            printLine('switching to process queue for work')
+            # initialize work in queue it not defined
+            if not self.process_queue_work_in:
+                self.process_queue_work_in = ProcessCom()
+            queue_work_in = self.process_queue_work_in
+
+            # initialize work out queue it not defined
+            if not self.process_queue_work_out:
+                self.process_queue_work_out = ProcessCom()
+            queue_work_out = self.process_queue_work_out
+
+        else:
+            raise Exception('work_queue_type ', work_queue_type, 'not found')
+
 
         in_com = ThreadCom()
         out_com = ThreadCom()
 
         queues = {
-            'work_in': self.thread_queue_work_in,
-            'work_out': self.thread_queue_work_out,
+            'work_in': queue_work_in,
+            'work_out': queue_work_out,
             'in': in_com,
             'out': out_com,
         }
@@ -251,8 +274,8 @@ class ProcessManagement:
             'object': t,
             'in_com': in_com,
             'out_com': out_com,
-            'work_in': self.thread_queue_work_in,
-            'work_out':  self.thread_queue_work_out,
+            'work_in': queue_work_in,
+            'work_out':  queue_work_out,
         }
 
         t.start()
